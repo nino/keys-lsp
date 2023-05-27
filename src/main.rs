@@ -93,7 +93,7 @@ impl Backend {
         }
         match value {
             serde_json::Value::String(s) => return Some(s.to_string()),
-            serde_json::Value::Object(obj) => return Some(format!("{:?}", obj)),
+            serde_json::Value::Object(obj) => return Some(serde_json::to_string(obj).ok()?),
             _ => return None,
         }
     }
