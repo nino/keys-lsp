@@ -21,29 +21,19 @@ fn get_hovered_line(params: &HoverParams) -> Result<String> {
     Ok(line)
 }
 
-// TODO there is an off-by-one-or-even-a-few error in here
-fn get_string_around_cursor(line: &str, cursor: usize) -> Result<String> {
-    let left = line
-        .get(0..cursor)
-        .ok_or(anyhow!("Cursor is out of bounds"))?;
-    let string_start = left
-        .rfind(|c: char| c != '"')
-        .ok_or(anyhow!("No quote mark found left of the cursor"))?;
-    let right = line
-        .get(cursor..)
-        .ok_or(anyhow!("Cursor is out of bounds"))?;
-    let string_end = cursor
-        + right
-            .find('"')
-            .ok_or(anyhow!("No quote mark found right of the cursor"))?;
-    Ok(line
-        .get(string_start..string_end)
-        .ok_or(anyhow!("String is out of bounds"))?
-        .to_string())
+fn get_string_around_cursor(line: &str, cursor: usize) -> Option<String> {
+    if line.len() <= cursor {
+        return None;
+    }
+    let left = &line[0..cursor];
+    let string_start = left.rfind('"')? + 1;
+    let right = &line[cursor..];
+    let string_end = cursor + right.find('"')?;
+    Some(line[string_start..string_end].to_string())
 }
 
-fn get_hovered_string(params: &HoverParams) -> Result<String> {
-    let line = get_hovered_line(&params)?;
+fn get_hovered_string(params: &HoverParams) -> Option<String> {
+    let line = get_hovered_line(&params).ok()?;
     get_string_around_cursor(
         &line,
         params.text_document_position_params.position.character as usize,
@@ -81,7 +71,7 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
         let _ = logger::log(&format!("Hovering! {:?}", params));
-        let hovered_string = get_hovered_string(&params).ok();
+        let hovered_string = get_hovered_string(&params);
         self.client
             .log_message(MessageType::INFO, "Hovering!")
             .await;
