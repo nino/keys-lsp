@@ -123,6 +123,13 @@ impl LanguageServer for Backend {
             .await;
     }
 
+    async fn goto_definition(
+        &self,
+        _: GotoDefinitionParams,
+    ) -> tower_lsp::jsonrpc::Result<Option<GotoDefinitionResponse>> {
+        Ok(None)
+    }
+
     async fn hover(&self, params: HoverParams) -> tower_lsp::jsonrpc::Result<Option<Hover>> {
         let hovered_string = get_hovered_string(&params);
         match hovered_string {
