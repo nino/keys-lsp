@@ -1,3 +1,6 @@
 v1:
 - Goto definition: Use tree-sitter to find the line/column where a translation is defined, and allow the user to jump there.
 - Hover over translation: In the JSON file, hovering over a translated string, show the full translation key, for easy grepping.
+
+Meta:
+- Add CI/tests
