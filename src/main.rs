@@ -4,7 +4,12 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tree_sitter::{Language, Node, Parser, Query, QueryCursor, TreeCursor};
 mod logger;
+
+extern "C" {
+    fn tree_sitter_json() -> Language;
+}
 
 #[derive(Debug)]
 struct Config {
@@ -153,8 +158,34 @@ impl LanguageServer for Backend {
 // "compstool:nested.works"
 // "compstool:nested.works.${things}"
 
+fn walk_the_tree_i_guess(source: &[u8], cursor: &mut TreeCursor) {
+    println!(
+        "Cursor node: {:?}, {:?}",
+        cursor.node(),
+        cursor.node().utf8_text(source)
+    );
+    if cursor.goto_first_child() {
+        walk_the_tree_i_guess(source, cursor);
+    }
+    if cursor.goto_next_sibling() {
+        walk_the_tree_i_guess(source, cursor);
+    }
+    cursor.goto_parent();
+}
+
 #[tokio::main]
 async fn main() {
+    // Trying to understand tree-sitter
+    let mut parser = Parser::new();
+    let language = unsafe { tree_sitter_json() };
+    parser.set_language(language).unwrap();
+    let json_content = r#"{ "abc": "def", "nested": { "works": "yes" } }"#;
+    let tree = parser.parse(json_content, None).unwrap();
+    let root_node = tree.root_node();
+    let mut cursor = root_node.walk();
+    walk_the_tree_i_guess(json_content.as_bytes(), &mut cursor);
+    // End of tree-sitter stuff
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
