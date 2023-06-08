@@ -4,12 +4,51 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use tree_sitter::{Language, Node, Parser, Query, QueryCursor, TreeCursor};
+use tree_sitter::Parser;
+mod json;
 mod logger;
 
-extern "C" {
-    fn tree_sitter_json() -> Language;
-}
+// struct TreeSitterConfig {
+//     parser: Parser,
+// }
+
+// impl TreeSitterConfig {
+//     fn new() -> Result<Self> {
+//         let mut parser = Parser::new();
+//         parser.set_language(unsafe { tree_sitter_json() })?;
+//         Ok(Self { parser })
+//     }
+// }
+
+// trait JsonNavigation {
+//     fn find_value_for_key(&mut self, key: &str) -> Result<()>;
+//     fn dig_til_next_pair(&mut self) -> Result<()>;
+// }
+
+// impl JsonNavigation for TreeCursor<'_> {
+//     fn find_value_for_key(&mut self, key: &str) -> Result<()> {
+//         self.dig_til_next_pair()?;
+//         println!("Found pair: {:?}", self.node());
+//         Ok(())
+//     }
+
+//     fn dig_til_next_pair(&mut self) -> Result<()> {
+//         let kind = self.node().kind();
+//         if kind == "pair" {
+//             return Ok(());
+//         } else if kind == "{" {
+//             return match self.goto_next_sibling() {
+//                 true => self.dig_til_next_pair(),
+//                 false => Err(anyhow!("No pair found")),
+//             };
+//         } else {
+//             return match self.goto_first_child() {
+//                 true => self.dig_til_next_pair(),
+//                 false => Err(anyhow!("No pair found")),
+//             };
+//         }
+//     }
+// }
 
 #[derive(Debug)]
 struct Config {
@@ -70,10 +109,10 @@ fn get_hovered_string(params: &HoverParams) -> Option<String> {
     )
 }
 
-#[derive(Debug)]
 struct Backend {
     client: Client,
     config: Config,
+    // tree_sitter: TreeSitterConfig,
 }
 
 impl Backend {
@@ -158,39 +197,50 @@ impl LanguageServer for Backend {
 // "compstool:nested.works"
 // "compstool:nested.works.${things}"
 
-fn walk_the_tree_i_guess(source: &[u8], cursor: &mut TreeCursor) {
-    println!(
-        "Cursor node: {:?}, {:?}",
-        cursor.node(),
-        cursor.node().utf8_text(source)
-    );
-    if cursor.goto_first_child() {
-        walk_the_tree_i_guess(source, cursor);
-    }
-    if cursor.goto_next_sibling() {
-        walk_the_tree_i_guess(source, cursor);
-    }
-    cursor.goto_parent();
-}
+// fn walk_the_tree_i_guess(source: &[u8], cursor: &mut TreeCursor) {
+//     println!(
+//         "Cursor node: {:?}, {:?}",
+//         cursor.node(),
+//         cursor.node().utf8_text(source)
+//     );
+//     if cursor.goto_first_child() {
+//         walk_the_tree_i_guess(source, cursor);
+//     }
+//     if cursor.goto_next_sibling() {
+//         walk_the_tree_i_guess(source, cursor);
+//     }
+//     cursor.goto_parent();
+// }
 
 #[tokio::main]
 async fn main() {
     // Trying to understand tree-sitter
     let mut parser = Parser::new();
-    let language = unsafe { tree_sitter_json() };
+    let language = unsafe { json::tree_sitter_json() };
     parser.set_language(language).unwrap();
-    let json_content = r#"{ "abc": "def", "nested": { "works": "yes" } }"#;
-    let tree = parser.parse(json_content, None).unwrap();
-    let root_node = tree.root_node();
-    let mut cursor = root_node.walk();
-    walk_the_tree_i_guess(json_content.as_bytes(), &mut cursor);
+    let json_content = String::from(r#"{ "abc": "def", "nested": { "works": "yes" } }"#);
+    let tree = parser.parse(&json_content, None).unwrap();
+    println!("{:?}", tree.root_node().to_sexp());
+    // let root_node = tree.root_node();
+    // println!("{:?}", cursor.find_value_for_key("abc"));
+    // walk_the_tree_i_guess(json_content.as_bytes(), &mut cursor);
     // End of tree-sitter stuff
+
+    let json_file = json::JsonFile {
+        text: json_content,
+        tree,
+    };
+    println!("{:?}", json_file.find_definition_for_key(&["abc"]));
 
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
     let config = Config::init();
 
-    let (service, socket) = LspService::new(|client| Backend { client, config });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        config,
+        // tree_sitter: TreeSitterConfig::new().unwrap(),
+    });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
